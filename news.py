@@ -2,7 +2,6 @@ import requests
 import hashlib
 import json
 import os
-import time
 import logging
 from dotenv import load_dotenv
 
@@ -14,7 +13,6 @@ NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-CHECK_INTERVAL = 1200  # 20 minutes
 SEEN_FILE = "seen_articles.json"
 REQUEST_TIMEOUT = 15
 
@@ -112,43 +110,49 @@ def is_serious(article):
 
 
 def main():
-    logging.info("🚨 UAE Production Monitor Started")
+    logging.info("🚨 UAE Monitor Triggered")
+
+    if not NEWSDATA_API_KEY or not BOT_TOKEN or not CHAT_ID:
+        logging.error("Missing environment variables.")
+        return
+
     seen_articles = load_seen()
 
-    while True:
-        try:
-            logging.info("Checking news...")
-            articles = fetch_news()
-            logging.info(f"Fetched {len(articles)} articles")
+    try:
+        logging.info("Checking news...")
+        articles = fetch_news()
+        logging.info(f"Fetched {len(articles)} articles")
 
-            for article in articles:
-                link = article.get("link")
-                if not link:
-                    continue
+        new_found = False
 
-                article_id = hashlib.md5(link.encode()).hexdigest()
+        for article in articles:
+            link = article.get("link")
+            if not link:
+                continue
 
-                if article_id in seen_articles:
-                    continue
+            article_id = hashlib.md5(link.encode()).hexdigest()
 
-                if not is_serious(article):
-                    continue
+            if article_id in seen_articles:
+                continue
 
-                message = (
-                    f"🚨 UAE ATTACK ALERT\n\n"
-                    f"{article.get('title')}\n\n"
-                    f"{link}"
-                )
+            if not is_serious(article):
+                continue
 
-                send_alert(message)
-                seen_articles.add(article_id)
+            message = (
+                f"🚨 UAE ATTACK ALERT\n\n"
+                f"{article.get('title')}\n\n"
+                f"{link}"
+            )
 
+            send_alert(message)
+            seen_articles.add(article_id)
+            new_found = True
+
+        if new_found:
             save_seen(seen_articles)
 
-        except Exception as e:
-            logging.error(f"Unexpected error: {e}")
-
-        time.sleep(CHECK_INTERVAL)
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
 
 
 if __name__ == "__main__":
